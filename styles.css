@@ -1,0 +1,7 @@
+#canvas {
+  border: solid;
+}
+.canvas-wrapper {
+  display: flex;
+  justify-content: center;
+}
