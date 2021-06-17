@@ -10,8 +10,19 @@ let state = {
 generatePoints();
 drawPoints()
 
+document.querySelector(".btn-run").addEventListener("click", e => {
+    let labels = [];
+    for (let i = 0; i < 160; ++i)
+        labels[i] = i % 2 === 0 ? 1 : -1;
 
-function generateGroup(centerX,centerY){
+    let forest = new forestjs.DecisionTree();
+    forest.train(state.points, labels);
+    let labelProbability = forest.predictOne(state.points[20]);
+    // labelProbabilities = forest.predict([[4, 5], [3, 7], [50, 40]]);
+    console.log(labelProbability);
+})
+
+function generateGroup(centerX,centerY) {
 
     let a = 30;
     let b = 30;
@@ -31,10 +42,10 @@ function generatePoints() {
 
     let centerX = state.canvasWidth ;
     let centerY = state.canvasHeight ;
-    generateGroup(centerX/3,centerY/3);
-    generateGroup(centerX*2.5/4,centerY*2.5/4);
-    generateGroup(centerX/3,centerY*2.5/4);
-    generateGroup(centerX*2.5/4,centerY/3);
+    generateGroup(centerX / 3,centerY / 3);
+    generateGroup(centerX * 2.5 / 4,centerY * 2.5 / 4);
+    generateGroup(centerX / 3,centerY * 2.5 / 4);
+    generateGroup(centerX * 2.5 / 4,centerY / 3);
    
 }
 

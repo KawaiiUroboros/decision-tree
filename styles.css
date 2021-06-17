@@ -1,6 +1,20 @@
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.btn-run {
+  margin: 10px;
+  width: 100px;
+  height: 50px;
+}
+
 #canvas {
   border: solid;
 }
+
 .canvas-wrapper {
   display: flex;
   justify-content: center;
