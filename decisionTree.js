@@ -1,290 +1,328 @@
-var forestjs = (function () {
-    // represents a single decision tree
-    var DecisionTree = function (options) { }
+var dt = (function () {
 
-    DecisionTree.prototype = {
+    /**
+     * Creates an instance of DecisionTree
+     *
+     * @constructor
+     * @param builder - contains training set and
+     *                  some configuration parameters
+     */
+    function DecisionTree(builder) {
+        this.root = buildDecisionTree({
+            trainingSet: builder.trainingSet,
+            ignoredAttributes: arrayToHashSet(builder.ignoredAttributes),
+            categoryAttr: builder.categoryAttr || 'category',
+            minItemsCount: builder.minItemsCount || 1,
+            entropyThrehold: builder.entropyThrehold || 0.01,
+            maxTreeDepth: builder.maxTreeDepth || 70
+        });
+    }
 
-        train: function (data, labels, options) {
+    DecisionTree.prototype.predict = function (item) {
+        return predict(this.root, item);
+    }
 
-            options = options || {};
-            var maxDepth = options.maxDepth || 4;
-            var weakType = options.type || 0;
-
-            var trainFun = decision2DStumpTrain;
-            var testFun = decision2DStumpTest;
-
-            if (options.trainFun) trainFun = options.trainFun;
-            if (options.testFun) testFun = options.testFun;
-
-            if (weakType == 0) {
-                trainFun = decisionStumpTrain;
-                testFun = decisionStumpTest;
+    /**
+     * Transforming array to object with such attributes
+     * as elements of array (afterwards it can be used as HashSet)
+     */
+    function arrayToHashSet(array) {
+        var hashSet = {};
+        if (array) {
+            for(var i in array) {
+                var attr = array[i];
+                hashSet[attr] = true;
             }
-            if (weakType == 1) {
-                trainFun = decision2DStumpTrain;
-                testFun = decision2DStumpTest;
+        }
+        return hashSet;
+    }
+
+    /**
+     * Calculating how many objects have the same
+     * values of specific attribute.
+     *
+     * @param items - array of objects
+     *
+     * @param attr  - variable with name of attribute,
+     *                which embedded in each object
+     */
+    function countUniqueValues(items, attr) {
+        var counter = {};
+
+        // detecting different values of attribute
+        for (var i = items.length - 1; i >= 0; i--) {
+            // items[i][attr] - value of attribute
+            counter[items[i][attr]] = 0;
+        }
+
+        // counting number of occurrences of each of values
+        // of attribute
+        for (var i = items.length - 1; i >= 0; i--) {
+            counter[items[i][attr]] += 1;
+        }
+
+        return counter;
+    }
+
+    /**
+     * Calculating entropy of array of objects
+     * by specific attribute.
+     *
+     * @param items - array of objects
+     *
+     * @param attr  - variable with name of attribute,
+     *                which embedded in each object
+     */
+    function entropy(items, attr) {
+        // counting number of occurrences of each of values
+        // of attribute
+        var counter = countUniqueValues(items, attr);
+
+        var entropy = 0;
+        var p;
+        for (var i in counter) {
+            p = counter[i] / items.length;
+            entropy += -p * Math.log(p);
+        }
+
+        return entropy;
+    }
+
+    /**
+     * Splitting array of objects by value of specific attribute,
+     * using specific predicate and pivot.
+     *
+     * Items which matched by predicate will be copied to
+     * the new array called 'match', and the rest of the items
+     * will be copied to array with name 'notMatch'
+     *
+     * @param items - array of objects
+     *
+     * @param attr  - variable with name of attribute,
+     *                which embedded in each object
+     *
+     * @param predicate - function(x, y)
+     *                    which returns 'true' or 'false'
+     *
+     * @param pivot - used as the second argument when
+     *                calling predicate function:
+     *                e.g. predicate(item[attr], pivot)
+     */
+    function split(items, attr, predicate, pivot) {
+        var match = [];
+        var notMatch = [];
+
+        var item,
+          attrValue;
+
+        for (var i = items.length - 1; i >= 0; i--) {
+            item = items[i];
+            attrValue = item[attr];
+
+            if (predicate(attrValue, pivot)) {
+                match.push(item);
+            } else {
+                notMatch.push(item);
             }
+        };
 
-            // initialize various helper variables
-            var numInternals = Math.pow(2, maxDepth) - 1;
-            var numNodes = Math.pow(2, maxDepth + 1) - 1;
-            var ixs = new Array(numNodes);
-            for (var i = 1; i < ixs.length; i++) ixs[i] = [];
-            ixs[0] = new Array(labels.length);
-            for (var i = 0; i < labels.length; i++) ixs[0][i] = i; // root node starts out with all nodes as relevant
-            var models = new Array(numInternals);
+        return {
+            match: match,
+            notMatch: notMatch
+        };
+    }
 
-            // train
-            for (var n = 0; n < numInternals; n++) {
+    /**
+     * Finding value of specific attribute which is most frequent
+     * in given array of objects.
+     *
+     * @param items - array of objects
+     *
+     * @param attr  - variable with name of attribute,
+     *                which embedded in each object
+     */
+    function mostFrequentValue(items, attr) {
+        // counting number of occurrences of each of values
+        // of attribute
+        var counter = countUniqueValues(items, attr);
 
-                // few base cases
-                var ixhere = ixs[n];
-                if (ixhere.length == 0) {
+        var mostFrequentCount = 0;
+        var mostFrequentValue;
+
+        for (var value in counter) {
+            if (counter[value] > mostFrequentCount) {
+                mostFrequentCount = counter[value];
+                mostFrequentValue = value;
+            }
+        };
+
+        return mostFrequentValue;
+    }
+
+    var predicates = {
+        '==': function (a, b) { return a == b },
+        '>=': function (a, b) { return a >= b }
+    };
+
+    /**
+     * Function for building decision tree
+     */
+    function buildDecisionTree(builder) {
+
+        var trainingSet = builder.trainingSet;
+        var minItemsCount = builder.minItemsCount;
+        var categoryAttr = builder.categoryAttr;
+        var entropyThrehold = builder.entropyThrehold;
+        var maxTreeDepth = builder.maxTreeDepth;
+        var ignoredAttributes = builder.ignoredAttributes;
+
+        if ((maxTreeDepth == 0) || (trainingSet.length <= minItemsCount)) {
+            // restriction by maximal depth of tree
+            // or size of training set is to small
+            // so we have to terminate process of building tree
+            return {
+                category: mostFrequentValue(trainingSet, categoryAttr)
+            };
+        }
+
+        var initialEntropy = entropy(trainingSet, categoryAttr);
+
+        if (initialEntropy <= entropyThrehold) {
+            // entropy of training set too small
+            // (it means that training set is almost homogeneous),
+            // so we have to terminate process of building tree
+            return {
+                category: mostFrequentValue(trainingSet, categoryAttr)
+            };
+        }
+
+        // used as hash-set for avoiding the checking of split by rules
+        // with the same 'attribute-predicate-pivot' more than once
+        var alreadyChecked = {};
+
+        // this variable expected to contain rule, which splits training set
+        // into subsets with smaller values of entropy (produces informational gain)
+        var bestSplit = {gain: 0};
+
+        for (var i = trainingSet.length - 1; i >= 0; i--) {
+            var item = trainingSet[i];
+
+            // iterating over all attributes of item
+            for (var attr in item) {
+                if ((attr == categoryAttr) || ignoredAttributes[attr]) {
                     continue;
                 }
-                if (ixhere.length == 1) {
-                    ixs[n * 2 + 1] = [ixhere[0]];
+
+                // let the value of current attribute be the pivot
+                var pivot = item[attr];
+
+                // pick the predicate
+                // depending on the type of the attribute value
+                var predicateName;
+                if (typeof pivot == 'number') {
+                    predicateName = '>=';
+                } else {
+                    // there is no sense to compare non-numeric attributes
+                    // so we will check only equality of such attributes
+                    predicateName = '==';
+                }
+
+                var attrPredPivot = attr + predicateName + pivot;
+                if (alreadyChecked[attrPredPivot]) {
+                    // skip such pairs of 'attribute-predicate-pivot',
+                    // which been already checked
                     continue;
-                } // arbitrary send it down left
-
-                // learn a weak model on relevant data for this node
-                var model = trainFun(data, labels, ixhere);
-                models[n] = model; // back it up model
-
-                // split the data according to the learned model
-                var ixleft = [];
-                var ixright = [];
-                for (var i = 0; i < ixhere.length; i++) {
-                    var label = testFun(data[ixhere[i]], model);
-                    if (label === 1) ixleft.push(ixhere[i]);
-                    else ixright.push(ixhere[i]);
                 }
-                ixs[n * 2 + 1] = ixleft;
-                ixs[n * 2 + 2] = ixright;
-            }
+                alreadyChecked[attrPredPivot] = true;
 
-            // compute data distributions at the leafs
-            var leafPositives = new Array(numNodes);
-            var leafNegatives = new Array(numNodes);
-            for (var n = numInternals; n < numNodes; n++) {
-                var numones = 0;
-                for (var i = 0; i < ixs[n].length; i++) {
-                    if (labels[ixs[n][i]] === 1) numones += 1;
-                }
-                leafPositives[n] = numones;
-                leafNegatives[n] = ixs[n].length - numones;
-            }
+                var predicate = predicates[predicateName];
 
-            // back up important prediction variables for predicting later
-            this.models = models;
-            this.leafPositives = leafPositives;
-            this.leafNegatives = leafNegatives;
-            this.maxDepth = maxDepth;
-            this.trainFun = trainFun;
-            this.testFun = testFun;
-        },
+                // splitting training set by given 'attribute-predicate-value'
+                var currSplit = split(trainingSet, attr, predicate, pivot);
 
-        // returns probability that example inst is 1.
-        predictOne: function (inst) {
+                // calculating entropy of subsets
+                var matchEntropy = entropy(currSplit.match, categoryAttr);
+                var notMatchEntropy = entropy(currSplit.notMatch, categoryAttr);
 
-            var n = 0;
-            for (var i = 0; i < this.maxDepth; i++) {
-                var dir = this.testFun(inst, this.models[n]);
-                if (dir === 1) n = n * 2 + 1; // descend left
-                else n = n * 2 + 2; // descend right
-            }
+                // calculating informational gain
+                var newEntropy = 0;
+                newEntropy += matchEntropy * currSplit.match.length;
+                newEntropy += notMatchEntropy * currSplit.notMatch.length;
+                newEntropy /= trainingSet.length;
+                var currGain = initialEntropy - newEntropy;
 
-            return (this.leafPositives[n] + 0.5) / (this.leafNegatives[n] + 1.0); // bayesian smoothing!
-        }
-    }
-
-    // returns model
-    function decisionStumpTrain(data, labels, ix, options) {
-
-        options = options || {};
-        var numtries = options.numTries || 10;
-
-        // choose a dimension at random and pick a best split
-        var ri = randi(0, data[0].length);
-        var N = ix.length;
-
-        // evaluate class entropy of incoming data
-        var H = entropy(labels, ix);
-        var bestGain = 0;
-        var bestThr = 0;
-        for (var i = 0; i < numtries; i++) {
-
-            // pick a random splitting threshold
-            var ix1 = ix[randi(0, N)];
-            var ix2 = ix[randi(0, N)];
-            while (ix2 == ix1) ix2 = ix[randi(0, N)]; // enforce distinctness of ix2
-
-            var a = Math.random();
-            var thr = data[ix1][ri] * a + data[ix2][ri] * (1 - a);
-
-            // measure information gain we'd get from split with thr
-            var l1 = 1, r1 = 1, lm1 = 1, rm1 = 1; //counts for Left and label 1, right and label 1, left and minus 1, right and minus 1
-            for (var j = 0; j < ix.length; j++) {
-                if (data[ix[j]][ri] < thr) {
-                    if (labels[ix[j]] == 1) l1++;
-                    else lm1++;
-                } else {
-                    if (labels[ix[j]] == 1) r1++;
-                    else rm1++;
+                if (currGain > bestSplit.gain) {
+                    // remember pairs 'attribute-predicate-value'
+                    // which provides informational gain
+                    bestSplit = currSplit;
+                    bestSplit.predicateName = predicateName;
+                    bestSplit.predicate = predicate;
+                    bestSplit.attribute = attr;
+                    bestSplit.pivot = pivot;
+                    bestSplit.gain = currGain;
                 }
             }
-            var t = l1 + lm1;  // normalize the counts to obtain probability estimates
-            l1 = l1 / t;
-            lm1 = lm1 / t;
-            t = r1 + rm1;
-            r1 = r1 / t;
-            rm1 = rm1 / t;
-
-            var LH = -l1 * Math.log(l1) - lm1 * Math.log(lm1); // left and right entropy
-            var RH = -r1 * Math.log(r1) - rm1 * Math.log(rm1);
-
-            var informationGain = H - LH - RH;
-            //console.log("Considering split %f, entropy %f -> %f, %f. Gain %f", thr, H, LH, RH, informationGain);
-            if (informationGain > bestGain || i === 0) {
-                bestGain = informationGain;
-                bestThr = thr;
-            }
         }
 
-        model = {};
-        model.thr = bestThr;
-        model.ri = ri;
-        return model;
+        if (!bestSplit.gain) {
+            // can't find optimal split
+            return { category: mostFrequentValue(trainingSet, categoryAttr) };
+        }
+
+        // building subtrees
+
+        builder.maxTreeDepth = maxTreeDepth - 1;
+
+        builder.trainingSet = bestSplit.match;
+        var matchSubTree = buildDecisionTree(builder);
+
+        builder.trainingSet = bestSplit.notMatch;
+        var notMatchSubTree = buildDecisionTree(builder);
+
+        return {
+            attribute: bestSplit.attribute,
+            predicate: bestSplit.predicate,
+            predicateName: bestSplit.predicateName,
+            pivot: bestSplit.pivot,
+            match: matchSubTree,
+            notMatch: notMatchSubTree,
+            matchedCount: bestSplit.match.length,
+            notMatchedCount: bestSplit.notMatch.length
+        };
     }
 
-    // returns a decision for a single data instance
-    function decisionStumpTest(inst, model) {
-        if (!model) {
-            // this is a leaf that never received any data...
-            return 1;
-        }
-        return inst[model.ri] < model.thr ? 1 : -1;
+    /**
+     * Classifying item, using decision tree
+     */
+    function predict(tree, item) {
+        var attr,
+          value,
+          predicate,
+          pivot;
 
-    }
+        // Traversing tree from the root to leaf
+        while(true) {
 
-    // returns model. Code duplication with decisionStumpTrain :(
-    function decision2DStumpTrain(data, labels, ix, options) {
-
-        options = options || {};
-        var numtries = options.numTries || 10;
-
-        // choose a dimension at random and pick a best split
-        var N = ix.length;
-
-        var ri1 = 0;
-        var ri2 = 1;
-        if (data[0].length > 2) {
-            // more than 2D data. Pick 2 random dimensions
-            ri1 = randi(0, data[0].length);
-            ri2 = randi(0, data[0].length);
-            while (ri2 == ri1) ri2 = randi(0, data[0].length); // must be distinct!
-        }
-
-        // evaluate class entropy of incoming data
-        var H = entropy(labels, ix);
-        var bestGain = 0;
-        var bestw1, bestw2, bestthr;
-        var dots = new Array(ix.length);
-        for (var i = 0; i < numtries; i++) {
-
-            // pick random line parameters
-            var alpha = randf(0, 2 * Math.PI);
-            var w1 = Math.cos(alpha);
-            var w2 = Math.sin(alpha);
-
-            // project data on this line and get the dot products
-            for (var j = 0; j < ix.length; j++) {
-                dots[j] = w1 * data[ix[j]][ri1] + w2 * data[ix[j]][ri2];
+            if (tree.category) {
+                // only leafs contains predicted category
+                return tree.category;
             }
 
-            // we are in a tricky situation because data dot product distribution
-            // can be skewed. So we don't want to select just randomly between
-            // min and max. But we also don't want to sort as that is too expensive
-            // let's pick two random points and make the threshold be somewhere between them.
-            // for skewed datasets, the selected points will with relatively high likelihood
-            // be in the high-desnity regions, so the thresholds will make sense
-            var ix1 = ix[randi(0, N)];
-            var ix2 = ix[randi(0, N)];
-            while (ix2 == ix1) ix2 = ix[randi(0, N)]; // enforce distinctness of ix2
-            var a = Math.random();
-            var dotthr = dots[ix1] * a + dots[ix2] * (1 - a);
+            attr = tree.attribute;
+            value = item[attr];
 
-            // measure information gain we'd get from split with thr
-            var l1 = 1, r1 = 1, lm1 = 1, rm1 = 1; //counts for Left and label 1, right and label 1, left and minus 1, right and minus 1
-            for (var j = 0; j < ix.length; j++) {
-                if (dots[j] < dotthr) {
-                    if (labels[ix[j]] == 1) l1++;
-                    else lm1++;
-                } else {
-                    if (labels[ix[j]] == 1) r1++;
-                    else rm1++;
-                }
-            }
-            var t = l1 + lm1;
-            l1 = l1 / t;
-            lm1 = lm1 / t;
-            t = r1 + rm1;
-            r1 = r1 / t;
-            rm1 = rm1 / t;
+            predicate = tree.predicate;
+            pivot = tree.pivot;
 
-            var LH = -l1 * Math.log(l1) - lm1 * Math.log(lm1); // left and right entropy
-            var RH = -r1 * Math.log(r1) - rm1 * Math.log(rm1);
-
-            var informationGain = H - LH - RH;
-            //console.log("Considering split %f, entropy %f -> %f, %f. Gain %f", thr, H, LH, RH, informationGain);
-            if (informationGain > bestGain || i === 0) {
-                bestGain = informationGain;
-                bestw1 = w1;
-                bestw2 = w2;
-                bestthr = dotthr;
+            // move to one of subtrees
+            if (predicate(value, pivot)) {
+                tree = tree.match;
+            } else {
+                tree = tree.notMatch;
             }
         }
-
-        model = {};
-        model.w1 = bestw1;
-        model.w2 = bestw2;
-        model.dotthr = bestthr;
-        return model;
     }
 
-    // returns label for a single data instance
-    function decision2DStumpTest(inst, model) {
-        if (!model) {
-            // this is a leaf that never received any data...
-            return 1;
-        }
-        return inst[0] * model.w1 + inst[1] * model.w2 < model.dotthr ? 1 : -1;
-
-    }
-
-    // Misc utility functions
-    function entropy(labels, ix) {
-        var N = ix.length;
-        var p = 0.0;
-        for (var i = 0; i < N; i++) {
-            if (labels[ix[i]] == 1) p += 1;
-        }
-        p = (1 + p) / (N + 2); // let's be bayesian about this
-        q = (1 + N - p) / (N + 2);
-        return (-p * Math.log(p) - q * Math.log(q));
-    }
-
-    // generate random floating point number between a and b
-    function randf(a, b) {
-        return Math.random() * (b - a) + a;
-    }
-
-    // generate random integer between a and b (b excluded)
-    function randi(a, b) {
-        return Math.floor(Math.random() * (b - a) + a);
-    }
-
-    // export public members
     var exports = {};
     exports.DecisionTree = DecisionTree;
     return exports;

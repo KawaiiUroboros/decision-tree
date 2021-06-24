@@ -1,17 +1,26 @@
-<!DOCTYPE html>
-<html lang="en-US">
+<html>
   <head>
-    <title>Desidion tree</title>
-    <link rel="stylesheet" href="./styles.css" />
+
+    <link rel="stylesheet" type="text/css" href="styles.css" media="screen" />
+    <script type="text/javascript" src="decisionTree.js"></script>
+    <script type="text/javascript" src="script.js"></script>
+    <title>decision tree</title>
+
   </head>
-  <body>
-    <div class="container">
-      <div class="canvas-wrapper">
-        <canvas id="canvas" width="690" height="651"></canvas>
-      </div>
-      <button class="btn-run">Run</button>
-    </div>
+  <body onLoad="init()">
+
+  <div class="color-select" label="#33CCFF">&nbsp;</div>
+  <div class="color-select" label="#009933">&nbsp;</div>
+  <div class="color-select" label="#FF6600">&nbsp;</div>
+  <div class="color-select" label="#FFC508">&nbsp;</div>
+
+  <button id="clearBtn" class="clearBtn">clear</button>
+  <br/>
+
+  <canvas id="myCanvas" width="400" height="400"></canvas>
+  <br/>
+
+  <div class="tree" id="displayTree"></div>
+
   </body>
-  <script type="text/javascript" src="./script.js"></script>
-  <script type="text/javascript" src="./decisionTree.js"></script>
 </html>

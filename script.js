@@ -1,65 +1,235 @@
-canvas = document.getElementById("canvas");
+function init() {
 
-let state = {
-    points : [],
-    pointSize : 3,
-    canvasWidth: canvas.width,
-    canvasHeight: canvas.height
-}
+  let canvas = document.getElementById('myCanvas');
+  let clearBtn = document.getElementById('clearBtn');
+  let context = canvas.getContext('2d');
+  let displayTreeDiv = document.getElementById('displayTree');
 
-generatePoints();
-drawPoints()
+  let NOT_SELECTED_COLOR_STYLE = '2px solid white';
+  let SELECTED_COLOR_STYLE = '2px solid black';
+  let colorSelectElements = document.getElementsByClassName('color-select');
+  for (let i = 0; i < colorSelectElements.length; i++) {
+    colorSelectElements[i].style.backgroundColor = colorSelectElements[i].getAttribute('label');
+    colorSelectElements[i].style.border = NOT_SELECTED_COLOR_STYLE;
+  }
 
-document.querySelector(".btn-run").addEventListener("click", e => {
-    let labels = [];
-    for (let i = 0; i < 160; ++i)
-        labels[i] = i % 2 === 0 ? 1 : -1;
+  let color = colorSelectElements[0].getAttribute('label');
+  let POINT_RADIUS = 3;
+  let points = [];
+  let tree = null;
+  let MAX_ALPHA = 128;
+  let addingPoints = false;
 
-    let forest = new forestjs.DecisionTree();
-    forest.train(state.points, labels);
-    let labelProbability = forest.predictOne(state.points[20]);
-    // labelProbabilities = forest.predict([[4, 5], [3, 7], [50, 40]]);
-    console.log(labelProbability);
-})
+  colorSelectElements[0].style.border = SELECTED_COLOR_STYLE;
 
-function generateGroup(centerX,centerY) {
+  canvas.addEventListener('mousedown', enableAddingPointsListener, false);
 
-    let a = 30;
-    let b = 30;
+  canvas.addEventListener('mouseup', rebuildForestListener, false);
+
+  canvas.addEventListener('mouseout', rebuildForestListener, false);
+
+  canvas.addEventListener('mousemove', addPointsListener, false);
+
+
+  for (let i = 0; i < colorSelectElements.length; i++) {
+    colorSelectElements[i].addEventListener('click', selectColorListener, false);
+  }
+
+  clearBtn.addEventListener('click', clearCanvasListener, false);
+
+  function enableAddingPointsListener(e) {
+    e.preventDefault();
+    addingPoints = true;
+  }
+
+  function addPointsListener(e) {
+    if (addingPoints) {
+      let x = e.offsetX ? e.offsetX : (e.layerX - canvas.offsetLeft);
+      let y = e.offsetY ? e.offsetY : (e.layerY - canvas.offsetTop);
+
+      drawCircle(context, x, y, POINT_RADIUS, color);
+      points.push({
+        x: x,
+        y: y,
+        color: color
+      });
+    }
+  }
+
+  function rebuildForestListener() {
+
+    // if (!addingPoints) return;
+
+    if (points.length === 0) return;
+
+    addingPoints = false;
+
+
+    let threshold = Math.floor(points.length / 100);
+    threshold = (threshold > 1) ? threshold : 1;
+
+    tree = new dt.DecisionTree({
+      trainingSet: points,
+      categoryAttr: 'color',
+      minItemsCount: threshold
+    });
+
+    displayTreePredictions();
+    displayPoints();
+
+    displayTreeDiv.innerHTML = treeToHtml(tree.root);
+  }
+
+  function displayTreePredictions() {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+    for (let x = 0; x < canvas.width; x++) {
+      for (let y = 0; y < canvas.height; y++) {
+        let predictedHexColor = tree.predict({
+          x: x,
+          y: y
+        });
+        putPixel(imageData, canvas.width, x, y, predictedHexColor, MAX_ALPHA);
+      }
+    }
+
+    context.putImageData(imageData, 0, 0);
+  }
+
+  function displayPoints() {
+    for (let p in points) {
+      drawCircle(context, points[p].x, points[p].y, POINT_RADIUS, points[p].color);
+    }
+  }
+
+  function drawCircle(context, x, y, radius, hexColor) {
+    context.beginPath();
+    context.arc(x, y, radius, 0, 2 * Math.PI, false);
+
+    let c = hexToRgb(hexColor)
+    context.fillStyle = 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')';
+
+    context.fill();
+    context.closePath();
+    context.stroke();
+  }
+
+  function putPixel(imageData, width, x, y, hexColor, alpha) {
+    let c = hexToRgb(hexColor);
+    let indx = (y * width + x) * 4;
+
+    let currAlpha = imageData.data[indx + 3];
+
+    imageData.data[indx] = (c.r * alpha + imageData.data[indx] * currAlpha) / (alpha + currAlpha);
+    imageData.data[indx + 1] = (c.g * alpha + imageData.data[indx + 1] * currAlpha) / (alpha + currAlpha);
+    imageData.data[indx + 2] = (c.b * alpha + imageData.data[indx + 2] * currAlpha) / (alpha + currAlpha);
+    imageData.data[indx + 3] = alpha + currAlpha;
+  }
+
+  function selectColorListener() {
+    color = this.getAttribute('label');
+
+    for (let i = 0; i < colorSelectElements.length; i++) {
+      colorSelectElements[i].style.border = NOT_SELECTED_COLOR_STYLE;
+    }
+
+    this.style.border = SELECTED_COLOR_STYLE;
+  }
+
+  function clearCanvasListener() {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    points = [];
+    displayTreeDiv.innerHTML = '';
+  }
+
+  /**
+   * Taken from: http://stackoverflow.com/a/5624139/653511
+   */
+  function hexToRgb(hex) {
+    // Expand shorthand form (e.g. "03F") to full form (e.g. "0033FF")
+    let shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+    hex = hex.replace(shorthandRegex, function (m, r, g, b) {
+      return r + r + g + g + b + b;
+    });
+
+    let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
+  }
+
+  // Repeating of string taken from: http://stackoverflow.com/a/202627/653511
+  let EMPTY_STRING = new Array(26).join('&nbsp;');
+
+  // Recursively traversing decision tree (DFS)
+  function treeToHtml(tree) {
+
+    if (tree.category) {
+      return  ['<ul>',
+        '<li>',
+        '<a href="#" style="background-color:', tree.category, '">', EMPTY_STRING, '</a>',
+        '</li>',
+        '</ul>'].join('');
+    }
+
+    return  ['<ul>',
+      '<li>',
+      '<a href="#"><b>', tree.attribute, ' ', tree.predicateName, ' ', tree.pivot, ' ?</b></a>',
+      '<ul>',
+      '<li>',
+      '<a href="#">yes (', tree.matchedCount, ' points) </a>',
+      treeToHtml(tree.match),
+      '</li>',
+      '<li>',
+      '<a href="#">no (', tree.notMatchedCount, ' points) </a>',
+      treeToHtml(tree.notMatch),
+      '</li>',
+      '</ul>',
+      '</li>',
+      '</ul>'].join('');
+  }
+
+  generatePoints();
+  drawPoints();
+
+  function generateGroup(centerX, centerY, color) {
+
+    let a = 18;
+    let b = 18;
 
     for (let i = 0; i < 40; ++i) {
 
-        let r = a * Math.random();
-        let fi = 2 * Math.PI * Math.random();
-        let x = centerX + r * Math.cos(fi)*3 ;
-        let y = centerY + b / a * r * Math.sin(fi)*3;
+      let r = a * Math.random();
+      let fi = 2 * Math.PI * Math.random();
+      let x = centerX + r * Math.cos(fi)*3 ;
+      let y = centerY + b / a * r * Math.sin(fi)*3;
 
-        state.points.push([x, y]);
+      points.push({
+        x: x,
+        y: y,
+        color: color
+      });
     }
-}
+  }
 
-function generatePoints() {
+  function generatePoints() {
 
-    let centerX = state.canvasWidth ;
-    let centerY = state.canvasHeight ;
-    generateGroup(centerX / 3,centerY / 3);
-    generateGroup(centerX * 2.5 / 4,centerY * 2.5 / 4);
-    generateGroup(centerX / 3,centerY * 2.5 / 4);
-    generateGroup(centerX * 2.5 / 4,centerY / 3);
-   
-}
+    let centerX = canvas.width;
+    let centerY = canvas.height;
+    generateGroup(centerX / 3,centerY / 3, "#33CCFF");
+    generateGroup(centerX * 2.5 / 4,centerY * 2.5 / 4, "#009933");
+    generateGroup(centerX / 3,centerY * 2.5 / 4, "#FF6600");
+    generateGroup(centerX * 2.5 / 4,centerY / 3, "#FFC508");
+    rebuildForestListener();
+  }
 
-
-function drawPoints(){
-    state.points.forEach(element => {
-        drawCoordinates(element[0],element[1]);
+  function drawPoints() {
+    points.forEach(point => {
+      drawCircle(context, point.x, point.y, 3, point.color);
     });
-}
+  }
 
-function drawCoordinates(x, y) {
-  var ctx = document.getElementById("canvas").getContext("2d");
-  ctx.fillStyle = "#ff2626"; // Red color
-  ctx.beginPath();
-  ctx.arc(x, y, state.pointSize, 0, Math.PI * 2, true);
-  ctx.fill();
 }
