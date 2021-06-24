@@ -1,26 +1,61 @@
 <html>
-  <head>
+<head>
 
-    <link rel="stylesheet" type="text/css" href="styles.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="styles.css" media="screen"/>
     <script type="text/javascript" src="decisionTree.js"></script>
     <script type="text/javascript" src="script.js"></script>
     <title>decision tree</title>
 
-  </head>
-  <body onLoad="init()">
+</head>
+<body onLoad="init()">
 
-  <div class="color-select" label="#33CCFF">&nbsp;</div>
-  <div class="color-select" label="#009933">&nbsp;</div>
-  <div class="color-select" label="#FF6600">&nbsp;</div>
-  <div class="color-select" label="#FFC508">&nbsp;</div>
+<div class="main">
+    <div class="upControls">
+        <div class="color-select" label="#33CCFF">&nbsp;</div>
+        <div class="color-select" label="#009933">&nbsp;</div>
+        <div class="color-select" label="#FF6600">&nbsp;</div>
+        <div class="color-select" label="#FFC508">&nbsp;</div>
 
-  <button id="clearBtn" class="clearBtn">clear</button>
-  <br/>
+        <button id="clearBtn" class="clearBtn">clear</button>
+    </div>
+    <br/>
+    <div class="graph">
+        <div class="y-axis" style="height: 416px;">
+            <div>400</div>
+            <div>350</div>
+            <div>300</div>
+            <div>250</div>
+            <div>200</div>
+            <div>150</div>
+            <div>100</div>
+            <div>50</div>
+            <div>0</div>
+        </div>
+        <div class="canvas-wrapper" style="height: 416px;">
+            <canvas id="myCanvas" width="400" height="400"></canvas>
+        </div>
+        <div class="x-axis">
+            <div>0</div>
+            <div>50</div>
+            <div>100</div>
+            <div>150</div>
+            <div>200</div>
+            <div>250</div>
+            <div>300</div>
+            <div>350</div>
+            <div>400</div>
+        </div>
+    </div>
+    <div class="generateButtons">
+        <button id="xorGenBtn">XOR</button>
+        <button id="linearGenBtn">Linear</button>
+        <button id="insideGenBtn">Inside</button>
+        <button id="defaultGenBtn">Default</button>
+    </div>
+    <br/>
+    <div class="tree" id="displayTree"></div>
+</div>
 
-  <canvas id="myCanvas" width="400" height="400"></canvas>
-  <br/>
 
-  <div class="tree" id="displayTree"></div>
-
-  </body>
+</body>
 </html>

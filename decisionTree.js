@@ -29,7 +29,7 @@ var dt = (function () {
     function arrayToHashSet(array) {
         var hashSet = {};
         if (array) {
-            for(var i in array) {
+            for (var i in array) {
                 var attr = array[i];
                 hashSet[attr] = true;
             }
@@ -113,7 +113,7 @@ var dt = (function () {
         var notMatch = [];
 
         var item,
-          attrValue;
+            attrValue;
 
         for (var i = items.length - 1; i >= 0; i--) {
             item = items[i];
@@ -124,7 +124,8 @@ var dt = (function () {
             } else {
                 notMatch.push(item);
             }
-        };
+        }
+        ;
 
         return {
             match: match,
@@ -154,14 +155,19 @@ var dt = (function () {
                 mostFrequentCount = counter[value];
                 mostFrequentValue = value;
             }
-        };
+        }
+        ;
 
         return mostFrequentValue;
     }
 
     var predicates = {
-        '==': function (a, b) { return a == b },
-        '>=': function (a, b) { return a >= b }
+        '==': function (a, b) {
+            return a == b
+        },
+        '>=': function (a, b) {
+            return a >= b
+        }
     };
 
     /**
@@ -266,7 +272,7 @@ var dt = (function () {
 
         if (!bestSplit.gain) {
             // can't find optimal split
-            return { category: mostFrequentValue(trainingSet, categoryAttr) };
+            return {category: mostFrequentValue(trainingSet, categoryAttr)};
         }
 
         // building subtrees
@@ -296,12 +302,12 @@ var dt = (function () {
      */
     function predict(tree, item) {
         var attr,
-          value,
-          predicate,
-          pivot;
+            value,
+            predicate,
+            pivot;
 
         // Traversing tree from the root to leaf
-        while(true) {
+        while (true) {
 
             if (tree.category) {
                 // only leafs contains predicted category
